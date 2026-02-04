@@ -3,16 +3,46 @@ set -euo pipefail
 
 # ====== Konfiguration ======
 TARGET_USER="${TARGET_USER:-ubuntu}"
-TARGET_HOST="${TARGET_HOST:-192.168.7.1}"
+TARGET_HOST="${TARGET_HOST:-10.10.100.162}"
 TARGET_DIR="${TARGET_DIR:-/opt/brewery-infra}"
 
 SSH_OPTS="${SSH_OPTS:- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR }"
+
+# ====== Flags ======
+DO_CORE_ONLY=0
+DO_HOTSPOT=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --core-only)
+      DO_CORE_ONLY=1
+      ;;
+    --hotspot)
+      DO_HOTSPOT=1
+      ;;
+    *)
+      echo "🟥 Unbekanntes Argument: $arg"
+      exit 1
+      ;;
+  esac
+done
+
+# ====== Flag-Validierung ======
+if [[ "$DO_CORE_ONLY" -eq 0 && "$DO_HOTSPOT" -eq 0 ]]; then
+  echo "🟥 Bitte ein Flag angeben:"
+  echo "   --core-only   oder   --hotspot"
+  exit 1
+fi
+
+if [[ "$DO_CORE_ONLY" -eq 1 && "$DO_HOTSPOT" -eq 1 ]]; then
+  echo "🟥 --core-only und --hotspot schließen sich gegenseitig aus"
+  exit 1
+fi
 
 # ====== Helpers ======
 log() { echo -e "🟦 $*"; }
 warn() { echo -e "🟨 $*" >&2; }
 die() { echo -e "🟥 $*" >&2; exit 1; }
-
 need_cmd() { command -v "$1" >/dev/null 2>&1 || die "Fehlendes Kommando: $1"; }
 
 # ====== Checks lokal ======
@@ -21,8 +51,9 @@ need_cmd ssh
 
 log "Deploy nach ${TARGET_USER}@${TARGET_HOST}:${TARGET_DIR}"
 
-# Zielverzeichnis anlegen (idempotent)
-ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "sudo mkdir -p '${TARGET_DIR}' && sudo chown -R '${TARGET_USER}':'${TARGET_USER}' '${TARGET_DIR}'" \
+# Zielverzeichnis anlegen
+ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" \
+  "sudo mkdir -p '${TARGET_DIR}' && sudo chown -R '${TARGET_USER}':'${TARGET_USER}' '${TARGET_DIR}'" \
   || die "Remote-Verbindung oder Rechteproblem."
 
 # Dateien übertragen
@@ -34,10 +65,23 @@ rsync -av --delete \
   ./ "${TARGET_USER}@${TARGET_HOST}:${TARGET_DIR}" \
   || die "rsync fehlgeschlagen."
 
-# Postinstall ausführen
+# ====== Remote Postinstall ======
 log "Starte Postinstall auf Remote..."
-ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "cd '${TARGET_DIR}' && sudo chmod +x postinstall/postinstall.sh && sudo ./postinstall/postinstall.sh" \
-  || die "Postinstall fehlgeschlagen. Prüfe die Ausgabe oben."
+
+if [[ "$DO_HOTSPOT" -eq 1 ]]; then
+  log "🔥 Modus: CORE + HOTSPOT"
+  ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
+    cd '${TARGET_DIR}' &&
+    sudo chmod +x postinstall/*.sh &&
+    sudo ./postinstall/postinstall.sh --hotspot
+  " || die "Postinstall (Hotspot) fehlgeschlagen."
+else
+  log "🧊 Modus: CORE ONLY"
+  ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
+    cd '${TARGET_DIR}' &&
+    sudo chmod +x postinstall/*.sh &&
+    sudo ./postinstall/postinstall.sh --core-only
+  " || die "Postinstall (Core) fehlgeschlagen."
+fi
 
 log "✅ Deployment abgeschlossen."
-warn "ℹ️ Wenn User-Gruppen geändert wurden (docker-Gruppe): einmal ab-/anmelden oder rebooten."
