@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: "Brewery Dashboards"
+    folder: "Brewery"
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
