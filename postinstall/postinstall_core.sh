@@ -100,5 +100,6 @@ docker run -d \
 ok "Core-Postinstall abgeschlossen (LAN/SSH wurde nicht verändert)"
 mkdir -p /var/lib/brewery-install
 touch /var/lib/brewery-install/core.done
-
+sudo usermod -aG docker ubuntu
+newgrp docker
 sudo reboot now

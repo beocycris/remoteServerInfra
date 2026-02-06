@@ -1,82 +1,42 @@
 #!/bin/bash
 set -euo pipefail
 
-log()  { echo -e "\033[1;34m🟦 $*\033[0m"; }
-ok()   { echo -e "\033[1;32m✅ $*\033[0m"; }
-warn() { echo -e "\033[1;33m⚠️  $*\033[0m"; }
-err()  { echo -e "\033[1;31m🟥 $*\033[0m"; }
-
-[[ $EUID -eq 0 ]] || { err "Bitte mit sudo ausführen"; exit 1; }
-
-FLAG_DIR="/var/lib/brewery-install"
-
-[[ -f "$FLAG_DIR/core.done" ]] || {
-  err "Core fehlt – Hotspot abgebrochen"
-  exit 1
-}
-
-[[ ! -f "$FLAG_DIR/hotspot.done" ]] || {
-  warn "Hotspot bereits aktiv – überspringe"
-  exit 0
-}
-
-# SSH-Schutz: niemals über wlan0
-if ip route get 1.1.1.1 | grep -q 'dev wlan0'; then
-  err "SSH läuft über wlan0 – Abbruch"
-  exit 1
-fi
-
 ############################################
-# Konfiguration
+# KONFIGURATION
 ############################################
 SSID="Brewery"
 WPA_PASS="BenFra2020!"
 
 WLAN_IF="wlan0"
-ETH_IF="eth0"
+LAN_IF="eth0"
 
 AP_IP="192.168.7.1"
 CIDR="24"
-DHCP_START="192.168.7.10"
-DHCP_END="192.168.7.50"
+SUBNET="192.168.7.0/24"
 
-log "Hotspot-Setup (Runtime, SSH-sicher)"
-
-############################################
-# wlan0 aus NetworkManager lösen
-############################################
-if systemctl is-active --quiet NetworkManager; then
-  nmcli device set "$WLAN_IF" managed no || true
-  ok "wlan0 aus NetworkManager gelöst"
-fi
+BASE_DIR="/opt/brewery-infra/hotspot"
+HOSTAPD_CONF="/etc/hostapd/hostapd.conf"
+DNSMASQ_CONF="/etc/dnsmasq.conf"
+START_SCRIPT="$BASE_DIR/start-hotspot.sh"
+SERVICE_FILE="/etc/systemd/system/brewery-hotspot.service"
 
 ############################################
-# WLAN vorbereiten
+# ROOT CHECK
 ############################################
-rfkill unblock all || true
-ip link set "$WLAN_IF" down || true
-sleep 1
+[[ $EUID -eq 0 ]] || { echo "🟥 Bitte mit sudo ausführen"; exit 1; }
 
-iw dev "$WLAN_IF" set type __ap || true
-
-ip addr flush dev "$WLAN_IF"
-ip addr add "$AP_IP/$CIDR" dev "$WLAN_IF"
-ip link set "$WLAN_IF" up
+echo "🟦 Brewery Hotspot Setup startet"
 
 ############################################
-# Warten bis wlan0 wirklich bereit ist
+# VERZEICHNIS
 ############################################
-log "Warte auf wlan0"
-for i in {1..15}; do
-  ip link show "$WLAN_IF" | grep -q "state UP" && break
-  sleep 1
-done
+mkdir -p "$BASE_DIR"
 
 ############################################
-# hostapd config
+# hostapd.conf
 ############################################
-log "Schreibe hostapd.conf"
-cat >/etc/hostapd/hostapd.conf <<EOF
+echo "🟦 Erzeuge hostapd.conf"
+cat >"$HOSTAPD_CONF" <<EOF
 interface=$WLAN_IF
 driver=nl80211
 ssid=$SSID
@@ -85,6 +45,8 @@ channel=1
 country_code=DE
 ieee80211d=1
 wmm_enabled=1
+auth_algs=1
+
 wpa=2
 wpa_passphrase=$WPA_PASS
 wpa_key_mgmt=WPA-PSK
@@ -92,50 +54,113 @@ rsn_pairwise=CCMP
 EOF
 
 ############################################
-# dnsmasq config
+# dnsmasq.conf
 ############################################
-log "Schreibe dnsmasq.conf"
-cat >/etc/dnsmasq.conf <<EOF
+echo "🟦 Erzeuge dnsmasq.conf"
+cat >"$DNSMASQ_CONF" <<EOF
 interface=$WLAN_IF
-dhcp-range=$DHCP_START,$DHCP_END,12h
-domain-needed
-bogus-priv
-server=1.1.1.1
-server=8.8.8.8
+bind-interfaces
+
+dhcp-range=192.168.7.10,192.168.7.50,255.255.255.0,12h
+dhcp-option=3,$AP_IP
+dhcp-option=6,1.1.1.1,8.8.8.8
+
+dhcp-authoritative
+log-dhcp
 EOF
 
 ############################################
-# NAT
+# START-SKRIPT (exakt dein funktionierender Ablauf)
 ############################################
-log "Aktiviere NAT"
-sysctl -w net.ipv4.ip_forward=1
+echo "🟦 Erzeuge Startskript"
+cat >"$START_SCRIPT" <<'EOF'
+#!/bin/bash
+set -euo pipefail
 
-iptables -t nat -C POSTROUTING -o "$ETH_IF" -j MASQUERADE 2>/dev/null || \
-iptables -t nat -A POSTROUTING -o "$ETH_IF" -j MASQUERADE
+WLAN_IF="wlan0"
+LAN_IF="eth0"
+AP_IP="192.168.7.1"
+CIDR="24"
+SUBNET="192.168.7.0/24"
 
-iptables -C FORWARD -i "$WLAN_IF" -o "$ETH_IF" -j ACCEPT 2>/dev/null || \
-iptables -A FORWARD -i "$WLAN_IF" -o "$ETH_IF" -j ACCEPT
+HOSTAPD_CONF="/etc/hostapd/hostapd.conf"
+DNSMASQ_CONF="/etc/dnsmasq.conf"
+
+echo "[brewery-hotspot] start"
+
+# 1) WLAN unblock (ESSENZIELL nach Boot!)
+rfkill unblock wifi || true
+sleep 1
+
+# 2) Interface hoch + IP setzen
+ip link set "$WLAN_IF" up || true
+ip addr flush dev "$WLAN_IF" || true
+ip addr add "$AP_IP/$CIDR" dev "$WLAN_IF"
+
+# 3) alte Prozesse entfernen
+pkill hostapd 2>/dev/null || true
+pkill dnsmasq 2>/dev/null || true
+sleep 1
+
+# 4) hostapd (SSID sichtbar)
+echo "[brewery-hotspot] hostapd"
+/usr/sbin/hostapd "$HOSTAPD_CONF" >/var/log/hostapd-brewery.log 2>&1 &
+sleep 2
+
+# 5) dnsmasq (DHCP)
+echo "[brewery-hotspot] dnsmasq"
+install -d -m 0755 /var/lib/misc
+touch /var/lib/misc/dnsmasq.leases
+chmod 0644 /var/lib/misc/dnsmasq.leases
+
+/usr/sbin/dnsmasq --conf-file="$DNSMASQ_CONF"
+
+# 6) Forwarding + NAT (Docker-sicher)
+sysctl -w net.ipv4.ip_forward=1 >/dev/null
+
+iptables -C FORWARD -i "$WLAN_IF" -o "$LAN_IF" -j ACCEPT 2>/dev/null || \
+iptables -I FORWARD 1 -i "$WLAN_IF" -o "$LAN_IF" -j ACCEPT
+
+iptables -C FORWARD -i "$LAN_IF" -o "$WLAN_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+iptables -I FORWARD 2 -i "$LAN_IF" -o "$WLAN_IF" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -t nat -C POSTROUTING -s "$SUBNET" -o "$LAN_IF" -j MASQUERADE 2>/dev/null || \
+iptables -t nat -A POSTROUTING -s "$SUBNET" -o "$LAN_IF" -j MASQUERADE
+
+echo "[brewery-hotspot] ready"
+EOF
+
+chmod +x "$START_SCRIPT"
 
 ############################################
-# dnsmasq DIREKT starten
+# systemd SERVICE (korrekt für diesen Ablauf)
 ############################################
-log "Starte dnsmasq (direkt)"
-pkill dnsmasq || true
-/usr/sbin/dnsmasq --conf-file=/etc/dnsmasq.conf </dev/null >/dev/null 2>&1 &
+echo "🟦 Erzeuge systemd Service"
+cat >"$SERVICE_FILE" <<EOF
+[Unit]
+Description=Brewery WLAN Hotspot
+After=network.target docker.service
+Wants=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=$START_SCRIPT
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 ############################################
-# hostapd DIREKT starten
+# systemd aktivieren
 ############################################
-log "Starte hostapd (direkt)"
-pkill hostapd || true
-/usr/sbin/hostapd /etc/hostapd/hostapd.conf </dev/null >/dev/null 2>&1 &
+echo "🟦 Aktiviere Service"
+systemctl daemon-reload
+systemctl enable brewery-hotspot.service
 
-############################################
-# Abschluss
-############################################
-touch "$FLAG_DIR/hotspot.done"
-
-ok "Hotspot aktiv"
-echo "📶 WLAN: $SSID"
-echo "🌐 Gateway: $AP_IP"
-echo "ℹ️ Runtime-Hotspot aktiv – kein Reboot!"
+echo
+echo "✅ Installation abgeschlossen"
+echo "➡️ Starte Hotspot jetzt mit:"
+echo "   sudo systemctl start brewery-hotspot"
+echo "➡️ Oder rebooten"
+echo  "es muss jedes mal das Skript sudo /usr/local/sbin/brewery-hotspot-start.sh ausgeführt werden, damit der Hotspot auch nach einem Reboot wieder läuft"

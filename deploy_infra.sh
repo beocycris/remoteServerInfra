@@ -11,6 +11,7 @@ SSH_OPTS="${SSH_OPTS:- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/nu
 # ====== Flags ======
 DO_CORE_ONLY=0
 DO_HOTSPOT=0
+DO_MONITORING=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -20,6 +21,9 @@ for arg in "$@"; do
     --hotspot)
       DO_HOTSPOT=1
       ;;
+    --monitoring)
+      DO_MONITORING=1
+      ;;
     *)
       echo "🟥 Unbekanntes Argument: $arg"
       exit 1
@@ -28,9 +32,9 @@ for arg in "$@"; do
 done
 
 # ====== Flag-Validierung ======
-if [[ "$DO_CORE_ONLY" -eq 0 && "$DO_HOTSPOT" -eq 0 ]]; then
+if [[ "$DO_CORE_ONLY" -eq 0 && "$DO_HOTSPOT" -eq 0 && "$DO_MONITORING" -eq 0 ]]; then
   echo "🟥 Bitte ein Flag angeben:"
-  echo "   --core-only   oder   --hotspot"
+  echo "   --core-only | --hotspot | --monitoring"
   exit 1
 fi
 
@@ -75,6 +79,15 @@ if [[ "$DO_HOTSPOT" -eq 1 ]]; then
     sudo chmod +x postinstall/*.sh &&
     sudo ./postinstall/postinstall.sh --hotspot
   " || die "Postinstall (Hotspot) fehlgeschlagen."
+
+elif [[ "$DO_MONITORING" -eq 1 ]]; then
+  log "📊 Modus: MONITORING"
+  ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
+    cd '${TARGET_DIR}' &&
+    sudo chmod +x postinstall/*.sh &&
+    sudo ./postinstall/postinstall.sh --monitoring
+  " || die "Postinstall (Monitoring) fehlgeschlagen."
+
 else
   log "🧊 Modus: CORE ONLY"
   ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
