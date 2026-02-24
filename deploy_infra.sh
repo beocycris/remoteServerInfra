@@ -4,7 +4,7 @@ set -euo pipefail
 # ====== Konfiguration ======
 TARGET_USER="${TARGET_USER:-ubuntu}"
 TARGET_HOST="${TARGET_HOST:-10.10.100.162}"
-TARGET_DIR="${TARGET_DIR:-/opt/brewery-infra}"
+TARGET_DIR="${TARGET_DIR:-/home/ubuntu/brewery-infra}"
 
 SSH_OPTS="${SSH_OPTS:- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR }"
 

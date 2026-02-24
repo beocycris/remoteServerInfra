@@ -14,7 +14,7 @@ AP_IP="192.168.7.1"
 CIDR="24"
 SUBNET="192.168.7.0/24"
 
-BASE_DIR="/opt/brewery-infra/hotspot"
+BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/hotspot"
 HOSTAPD_CONF="/etc/hostapd/hostapd.conf"
 DNSMASQ_CONF="/etc/dnsmasq.conf"
 START_SCRIPT="$BASE_DIR/start-hotspot.sh"

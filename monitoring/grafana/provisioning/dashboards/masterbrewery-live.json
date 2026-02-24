@@ -1,0 +1,744 @@
+{
+    "title": "MasterBrewery – Live + Trends + Aktoren",
+    "uid": "masterbrewery-live",
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "5s",
+    "time": {
+        "from": "now-2h",
+        "to": "now"
+    },
+    "templating": {
+        "list": [
+            {
+                "type": "constant",
+                "name": "bucket",
+                "label": "Influx Bucket",
+                "query": "brewery",
+                "current": {
+                    "text": "brewery",
+                    "value": "brewery"
+                }
+            },
+            {
+                "type": "custom",
+                "name": "range",
+                "label": "Zeitfenster",
+                "query": "now-15m,now-1h,now-2h,now-6h,now-24h",
+                "current": {
+                    "text": "now-2h",
+                    "value": "now-2h"
+                }
+            }
+        ]
+    },
+    "panels": [
+        {
+            "type": "row",
+            "title": "Live Temperaturen (Istwerte)",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 24,
+                "h": 1
+            }
+        },
+        {
+            "type": "gauge",
+            "title": "HLT (Ist)",
+            "gridPos": {
+                "x": 0,
+                "y": 1,
+                "w": 6,
+                "h": 7
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Sensor_HLT\")\n  |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "min": 0,
+                    "max": 105,
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": 0
+                            },
+                            {
+                                "color": "orange",
+                                "value": 60
+                            },
+                            {
+                                "color": "red",
+                                "value": 82
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "type": "gauge",
+            "title": "MT (Ist)",
+            "gridPos": {
+                "x": 6,
+                "y": 1,
+                "w": 6,
+                "h": 7
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Sensor_MT\")\n  |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "min": 0,
+                    "max": 105
+                }
+            }
+        },
+        {
+            "type": "gauge",
+            "title": "BK (Ist)",
+            "gridPos": {
+                "x": 12,
+                "y": 1,
+                "w": 6,
+                "h": 7
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Sensor_BK\")\n  |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius",
+                    "min": 0,
+                    "max": 110
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Prozessstatus (erwartetes Feld: Process_State)",
+            "gridPos": {
+                "x": 18,
+                "y": 1,
+                "w": 6,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -15m)\n  |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Process_State\")\n  |> last()"
+                }
+            ],
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "SudID (aus Information.SudID)",
+            "gridPos": {
+                "x": 18,
+                "y": 4,
+                "w": 6,
+                "h": 4
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"SudID\")\n  |> last()"
+                }
+            ],
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "row",
+            "title": "Trends: Temperaturen (Ist) + PID Setpoint vs Ist (optional)",
+            "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 24,
+                "h": 1
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Temperatur Verlauf (HLT/MT/BK/COOLING/COIL)",
+            "gridPos": {
+                "x": 0,
+                "y": 9,
+                "w": 24,
+                "h": 9
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: ${range})\n  |> filter(fn: (r) => r._measurement == \"brewery\")\n  |> filter(fn: (r) => r._field == \"Sensor_HLT\" or r._field == \"Sensor_MT\" or r._field == \"Sensor_BK\" or r._field == \"Sensor_COOLING\" or r._field == \"Sensor_COIL\")"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "PID: HLT Setpoint vs Ist (erwartete Felder: PID_HLT_Setpoint, Sensor_HLT)",
+            "gridPos": {
+                "x": 0,
+                "y": 18,
+                "w": 12,
+                "h": 7
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: ${range})\n  |> filter(fn: (r) => r._measurement == \"brewery\")\n  |> filter(fn: (r) => r._field == \"Sensor_HLT\" or r._field == \"PID_HLT_Setpoint\")"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius"
+                }
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "PID: BK Setpoint vs Ist (erwartete Felder: PID_BK_Setpoint, Sensor_BK)",
+            "gridPos": {
+                "x": 12,
+                "y": 18,
+                "w": 12,
+                "h": 7
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: ${range})\n  |> filter(fn: (r) => r._measurement == \"brewery\")\n  |> filter(fn: (r) => r._field == \"Sensor_BK\" or r._field == \"PID_BK_Setpoint\")"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius"
+                }
+            }
+        },
+        {
+            "type": "row",
+            "title": "Durchfluss",
+            "gridPos": {
+                "x": 0,
+                "y": 25,
+                "w": 24,
+                "h": 1
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Coil_MT_in",
+            "gridPos": {
+                "x": 0,
+                "y": 26,
+                "w": 6,
+                "h": 4
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Coil_MT_in\")\n  |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "l/min"
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "BK_in",
+            "gridPos": {
+                "x": 6,
+                "y": 26,
+                "w": 6,
+                "h": 4
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"BK_in\")\n  |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "l/min"
+                }
+            }
+        },
+        {
+            "type": "row",
+            "title": "Aktoren: Ventil-Matrix + Pumpen/Heater/Buzzer",
+            "gridPos": {
+                "x": 0,
+                "y": 30,
+                "w": 24,
+                "h": 1
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_1",
+            "gridPos": {
+                "x": 0,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_1\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_2",
+            "gridPos": {
+                "x": 2,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_2\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_3",
+            "gridPos": {
+                "x": 4,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_3\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_4",
+            "gridPos": {
+                "x": 6,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_4\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_5",
+            "gridPos": {
+                "x": 8,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_5\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_6",
+            "gridPos": {
+                "x": 10,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_6\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_7",
+            "gridPos": {
+                "x": 12,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_7\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_8",
+            "gridPos": {
+                "x": 14,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_8\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_9",
+            "gridPos": {
+                "x": 16,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_9\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Ventil_10",
+            "gridPos": {
+                "x": 18,
+                "y": 31,
+                "w": 2,
+                "h": 3
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\") |> range(start: -10m) |> filter(fn: (r) => r._measurement == \"brewery\" and r._field == \"Ventil_10\") |> last()"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "mappings": [
+                        {
+                            "type": "value",
+                            "options": {
+                                "true": {
+                                    "text": "OPEN",
+                                    "color": "green"
+                                },
+                                "false": {
+                                    "text": "CLOSED",
+                                    "color": "red"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Pumpen (P_HLT/P_MT/P_BK)",
+            "gridPos": {
+                "x": 0,
+                "y": 34,
+                "w": 8,
+                "h": 4
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r._measurement == \"brewery\")\n  |> filter(fn: (r) => r._field == \"Pump_HLT\" or r._field == \"Pump_MT\" or r._field == \"Pump_BK\")\n  |> last()"
+                }
+            ],
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "orientation": "vertical"
+            }
+        },
+        {
+            "type": "stat",
+            "title": "Heater (HLT/BK) + BUZZER",
+            "gridPos": {
+                "x": 8,
+                "y": 34,
+                "w": 8,
+                "h": 4
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: -10m)\n  |> filter(fn: (r) => r._measurement == \"brewery\")\n  |> filter(fn: (r) => r._field == \"Heater_HLT\" or r._field == \"Heater_BK\" or r._field == \"BUZZER\")\n  |> last()"
+                }
+            ],
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "orientation": "vertical"
+            }
+        },
+        {
+            "type": "row",
+            "title": "Doppelsud (optional: Felder mit _A / _B oder _1 / _2)",
+            "gridPos": {
+                "x": 0,
+                "y": 38,
+                "w": 24,
+                "h": 1
+            }
+        },
+        {
+            "type": "timeseries",
+            "title": "Doppelsud: Temperaturverlauf (erwartet z.B. Sensor_HLT_A/B, Sensor_MT_A/B, Sensor_BK_A/B)",
+            "gridPos": {
+                "x": 0,
+                "y": 39,
+                "w": 24,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "refId": "A",
+                    "query": "from(bucket: \"${bucket}\")\n  |> range(start: ${range})\n  |> filter(fn: (r) => r._measurement == \"brewery\")\n  |> filter(fn: (r) => r._field =~ /^Sensor_(HLT|MT|BK)_(A|B)$/)"
+                }
+            ],
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "celsius"
+                }
+            }
+        }
+    ]
+}

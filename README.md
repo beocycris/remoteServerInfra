@@ -73,7 +73,88 @@ docker compose -f monitoring/docker-compose.yml up -d
 
 - Prometheus sammelt Metriken (Konfiguration: `monitoring/prometheus/prometheus.yml`).
 - Grafana ist via Provisioning vorkonfiguriert (Dashboards, Datasources) unter `monitoring/grafana/provisioning/`.
+- Telegraf liest MQTT-Nachrichten und schreibt sie parallel nach InfluxDB sowie als Prometheus-Metriken für Grafana (Konfiguration: `monitoring/telegraf/telegraf.conf`).
+- InfluxDB 2 ist für MQTT-Zeitreihendaten integriert und als Grafana-Datasource provisioniert.
 - Dashboards sind YAML/JSON-basiert und werden beim Containerstart automatisch geladen.
+
+### Ablageorte auf dem Zielsystem
+
+Standard-Deploy-Pfad ist:
+
+- `/home/ubuntu/brewery-infra`
+
+Typische Ordner je Modus:
+
+- Core/Repository-Dateien: `/home/ubuntu/brewery-infra`
+- Monitoring-Compose & Config: `/home/ubuntu/brewery-infra/monitoring`
+- Monitoring-Daten zentral je Container unter `/home/ubuntu/container-data`:
+	- `/home/ubuntu/container-data/prometheus`
+	- `/home/ubuntu/container-data/grafana`
+	- `/home/ubuntu/container-data/influxdb/data`
+	- `/home/ubuntu/container-data/influxdb/config`
+	- `/home/ubuntu/container-data/telegraf`
+	- `/home/ubuntu/container-data/node-exporter` (strukturbedingt, optional leer)
+	- `/home/ubuntu/container-data/cadvisor` (strukturbedingt, optional leer)
+	- `/home/ubuntu/container-data/glances` (strukturbedingt, optional leer)
+- Hotspot-Projektdaten: `/home/ubuntu/brewery-infra/hotspot`
+
+Installations-Flags liegen systemweit unter `/var/lib/brewery-install`.
+Docker selbst (Engine, Images, Layer) bleibt weiterhin unter dem Standardpfad `/var/lib/docker`.
+
+### MQTT via Telegraf
+
+Der Service `telegraf` ist in `monitoring/docker-compose.yml` integriert und nutzt folgende Variablen:
+
+- `MQTT_BROKER_URL` (Default: `tcp://host.docker.internal:1883`)
+- `MQTT_TOPICS` (Default: `brewery/#`)
+- `MQTT_QOS` (Default: `0`)
+- `MQTT_CLIENT_ID` (Default: `telegraf-brewery`)
+- `MQTT_USERNAME` / `MQTT_PASSWORD` (optional)
+
+Nachrichten werden als JSON erwartet (`data_format = "json"`), als Prometheus-Metriken auf Port `9273` exportiert und zusätzlich nach InfluxDB-Bucket `mqtt` geschrieben.
+
+### InfluxDB Zugang
+
+- URL: `http://localhost:8086`
+- Benutzer: `admin`
+- Passwort: `BenFra2020!!`
+- Org: `brewery`
+- Bucket: `mqtt`
+- Admin Token: `BenFra2020!!`
+
+### Schnellcheck: MQTT → Telegraf → InfluxDB → Grafana
+
+1. Monitoring-Stack starten/neu laden:
+
+```bash
+docker compose -f monitoring/docker-compose.yml up -d
+```
+
+2. Service-Status prüfen:
+
+```bash
+docker compose -f monitoring/docker-compose.yml ps
+```
+
+3. Telegraf-Metrics-Endpunkt prüfen (Prometheus-Export):
+
+```bash
+curl -s http://localhost:9273/metrics | head
+```
+
+4. InfluxDB-Health prüfen:
+
+```bash
+curl -s http://localhost:8086/health
+```
+
+5. Datenfluss über Logs verifizieren:
+
+```bash
+docker compose -f monitoring/docker-compose.yml logs telegraf --tail=100
+```
+
+In Grafana unter `Connections -> Data sources` sollten `Prometheus` und `InfluxDB` als verfügbare Datasources sichtbar sein.
 
 ---
 

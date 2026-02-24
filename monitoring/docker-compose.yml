@@ -7,7 +7,7 @@ services:
     restart: always
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
+      - /home/ubuntu/container-data/prometheus:/prometheus
     ports:
       - "9090:9090"
 
@@ -17,22 +17,21 @@ services:
     restart: always
     depends_on:
       - prometheus
+      - influxdb
     ports:
       - "3000:3000"
     volumes:
-      - grafana_data:/var/lib/grafana
+      - /home/ubuntu/container-data/grafana:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
     environment:
       GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: brewery
+      GF_SECURITY_ADMIN_PASSWORD: BenFra2020!!
       GF_USERS_ALLOW_SIGN_UP: "false"
 
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
     restart: always
-    network_mode: host
     pid: host
     volumes:
       - /:/host:ro,rslave
@@ -55,6 +54,8 @@ services:
     image: nicolargo/glances:latest
     container_name: glances
     restart: always
+    ports:
+      - "61028:61028"
     network_mode: host
     pid: host
     volumes:
@@ -63,6 +64,39 @@ services:
     environment:
       - GLANCES_OPT=-w
 
-volumes:
-  prometheus_data:
-  grafana_data:
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    restart: always
+    ports:
+      - "8086:8086"
+    volumes:
+      - /home/ubuntu/container-data/influxdb/data:/var/lib/influxdb2
+      - /home/ubuntu/container-data/influxdb/config:/etc/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: BenFra2020!!
+      DOCKER_INFLUXDB_INIT_ORG: brewery
+      DOCKER_INFLUXDB_INIT_BUCKET: brewery
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: BenFra2020!!
+
+  telegraf:
+    image: telegraf:latest
+    container_name: telegraf
+    restart: always
+    depends_on:
+      - prometheus
+      - influxdb
+    ports:
+      - "9273:9273"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - /home/ubuntu/container-data/telegraf:/var/lib/telegraf
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: BenFra2020!!
+      INFLUX_ORG: brewery
+      INFLUX_BUCKET: brewery
