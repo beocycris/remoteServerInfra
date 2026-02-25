@@ -9,6 +9,7 @@ err()  { echo -e "\033[1;31m🟥 $*\033[0m"; }
 FLAG_DIR="/var/lib/brewery-install"
 MON_FLAG="$FLAG_DIR/monitoring.done"
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STACK_NAME="brewery-monitoring"
 
 [[ -f "$FLAG_DIR/core.done" ]] || {
   err "Core nicht installiert – Monitoring abgebrochen"
@@ -43,8 +44,21 @@ if [[ -f ../env/brewery.env ]]; then
   export $(grep -v '^#' ../env/brewery.env | xargs)
 fi
 
-docker compose pull
-docker compose up -d
+if [[ "${SWARM_ACTION:-none}" != "none" ]]; then
+  log "Docker Swarm Aktion erkannt: ${SWARM_ACTION}"
+  "${BASE_DIR}/postinstall/postinstall_swarm.sh"
+fi
+
+SWARM_STATE="$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || echo inactive)"
+
+if [[ "$SWARM_STATE" == "active" ]]; then
+  log "Deploy via Docker Swarm Stack (${STACK_NAME})"
+  docker stack deploy -c docker-stack.yml "$STACK_NAME"
+else
+  log "Deploy via Docker Compose"
+  docker compose pull
+  docker compose up -d
+fi
 
 touch "$MON_FLAG"
 

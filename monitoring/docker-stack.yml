@@ -1,0 +1,166 @@
+version: "3.9"
+
+configs:
+  prometheus_yml:
+    file: ./prometheus/prometheus.yml
+  telegraf_conf:
+    file: ./telegraf/telegraf.conf
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  influxdb_data:
+  influxdb_config:
+
+networks:
+  monitoring:
+    driver: overlay
+    attachable: true
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    configs:
+      - source: prometheus_yml
+        target: /etc/prometheus/prometheus.yml
+    volumes:
+      - prometheus_data:/prometheus
+    ports:
+      - target: 9090
+        published: 9090
+        protocol: tcp
+        mode: ingress
+    networks:
+      - monitoring
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - target: 3000
+        published: 3000
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: BenFra2020!!
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    networks:
+      - monitoring
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  influxdb:
+    image: influxdb:2.7
+    ports:
+      - target: 8086
+        published: 8086
+        protocol: tcp
+        mode: ingress
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+      - influxdb_config:/etc/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: BenFra2020!!
+      DOCKER_INFLUXDB_INIT_ORG: brewery
+      DOCKER_INFLUXDB_INIT_BUCKET: brewery
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: BenFra2020!!
+    networks:
+      - monitoring
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+  telegraf:
+    image: telegraf:latest
+    configs:
+      - source: telegraf_conf
+        target: /etc/telegraf/telegraf.conf
+    ports:
+      - target: 9273
+        published: 9273
+        protocol: tcp
+        mode: ingress
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: BenFra2020!!
+      INFLUX_ORG: brewery
+      INFLUX_BUCKET: brewery
+    networks:
+      - monitoring
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.platform.os == linux
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - "--path.rootfs=/host"
+    networks:
+      - monitoring
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - target: 8080
+        published: 8085
+        protocol: tcp
+        mode: host
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - monitoring
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux
+
+  glances:
+    image: nicolargo/glances:latest
+    ports:
+      - target: 61208
+        published: 61028
+        protocol: tcp
+        mode: host
+    pid: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /:/rootfs:ro
+    environment:
+      GLANCES_OPT: -w
+    networks:
+      - monitoring
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux

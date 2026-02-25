@@ -43,7 +43,8 @@ echo "🟦 Postinstall Orchestrator"
 chmod +x \
   ./postinstall/postinstall_core.sh \
   ./postinstall/postinstall_hotspot.sh \
-  ./postinstall/postinstall_monitoring.sh
+  ./postinstall/postinstall_monitoring.sh \
+  ./postinstall/postinstall_swarm.sh
 
 ############################################
 # MODE: CORE ONLY
