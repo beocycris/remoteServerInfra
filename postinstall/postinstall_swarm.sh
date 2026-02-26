@@ -71,6 +71,22 @@ if [[ "$SWARM_ACTION" == "join-worker" || "$SWARM_ACTION" == "join-manager" ]]; 
   ok "Swarm-Join erfolgreich"
   exit 0
 fi
+echo "🔎 Swarm Status"
+docker info | grep Swarm
 
+echo "🔎 Nodes"
+docker node ls
+
+echo "🔎 Disk"
+df -h /
+
+echo "🔎 Docker Space"
+docker system df
+
+echo "🔎 RAM"
+free -h
+
+echo "🔎 Overlay Networks"
+docker network ls | grep overlay
 err "Unbekannte SWARM_ACTION: $SWARM_ACTION"
 exit 1

@@ -240,6 +240,12 @@ export TOKEN=$(ssh ubuntu@192.168.1.10 "docker swarm join-token worker -q")
 - URL: `http://<MANAGER_IP>:3000`
 - Benutzer: `admin` / Passwort: `BenFra2020!!`
 - Dashboards werden automatisch provisioniert
+- Neues Dashboard: **Swarm Cluster Overview**
+  - `Nodes: CPU (%)`
+  - `Nodes: RAM Used (%)`
+  - `Nodes: Running Services (count)`
+  - `Services: Running Replicas`
+  - `Replica Distribution: Service per Node`
 
 ### **Prometheus Queries**
 - URL: `http://<MANAGER_IP>:9090`
@@ -258,6 +264,57 @@ export TOKEN=$(ssh ubuntu@192.168.1.10 "docker swarm join-token worker -q")
 # Stack neu deployen (z.B. nach Config-Änderung)
 cd brewery-infra/monitoring
 docker stack deploy -c docker-stack.yml brewery-monitoring
+
+### **Gesamtes Swarm-Cluster neu starten**
+
+Auf einem **Manager-Node** ausführen (oder per SSH auf den Manager):
+
+```bash
+cd brewery-infra
+chmod +x restart_swarm_cluster.sh
+
+# Erst prüfen (ohne Reboot)
+./restart_swarm_cluster.sh --dry-run
+
+# Danach wirklich ausführen
+./restart_swarm_cluster.sh
+```
+
+Optional:
+
+```bash
+# ohne interaktive Rückfrage
+./restart_swarm_cluster.sh --yes
+
+# anderer SSH-User für Worker/Manager-Reboots
+TARGET_USER=ubuntu ./restart_swarm_cluster.sh --yes
+```
+
+Verhalten des Scripts:
+- rebootet zuerst alle Worker
+- rebootet den aktuellen Manager zuletzt
+- nutzt die Swarm-Node-Adressen aus `docker node inspect`
+
+### **Variante mit Auto-Wait + Healthcheck (von Mac/Workstation)**
+
+Wenn du nach dem Manager-Reboot automatisch warten und direkt prüfen willst:
+
+```bash
+cd remoteServerInfra
+chmod +x restart_swarm_cluster_remote.sh
+
+# Testlauf ohne Reboot
+TARGET_USER=ubuntu TARGET_HOST=10.10.100.166 ./restart_swarm_cluster_remote.sh --dry-run
+
+# Echtlauf mit Auto-Wait + Statusprüfung
+TARGET_USER=ubuntu TARGET_HOST=10.10.100.166 ./restart_swarm_cluster_remote.sh --yes
+```
+
+Diese Variante:
+- rebootet Worker zuerst, Manager zuletzt
+- wartet automatisch auf SSH-Reconnect des Managers
+- wartet auf `Nodes Ready` + konvergierte Service-Replikas
+- zeigt anschließend `docker node ls` und `docker service ls`
 
 # Service skalieren
 docker service scale brewery-monitoring_telegraf=3

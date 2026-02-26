@@ -46,7 +46,9 @@ country_code=DE
 ieee80211d=1
 wmm_enabled=1
 auth_algs=1
-
+ap_max_inactivity=30
+disassoc_low_ack=1
+skip_inactivity_poll=1
 wpa=2
 wpa_passphrase=$WPA_PASS
 wpa_key_mgmt=WPA-PSK
