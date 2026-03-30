@@ -30,13 +30,14 @@ Remote-Variante (von Workstation/Mac aus):
 3) wartet automatisch auf Manager-SSH
 4) wartet auf Cluster-Ready + Service-Konvergenz
 5) zeigt Status (docker node ls, docker service ls)
+6) fragt optional Manager-IP + Worker-Auswahl interaktiv ab
 
 Optionen:
   --dry-run   Zeigt nur, was gemacht würde
   --yes       Keine interaktive Bestätigung
 
 Umgebungsvariablen:
-  TARGET_HOST             Manager-IP oder Hostname (pflicht)
+  TARGET_HOST             Manager-IP oder Hostname (optional, sonst Prompt)
   TARGET_USER             SSH-User (Default: ubuntu)
   SSH_OPTS                Zusätzliche SSH-Optionen
   WAIT_BETWEEN_WORKERS    Pause zwischen Worker-Reboots in Sekunden (Default: 4)
@@ -63,6 +64,10 @@ need_cmd() { command -v "$1" >/dev/null 2>&1 || die "Fehlendes Kommando: $1"; }
 need_cmd ssh
 need_cmd awk
 
+if [[ -z "$TARGET_HOST" ]]; then
+  read -r -p "Manager-IP oder Hostname eingeben: " TARGET_HOST
+fi
+
 [[ -n "$TARGET_HOST" ]] || die "TARGET_HOST fehlt (Manager-IP/Hostname)."
 
 remote() {
@@ -82,16 +87,71 @@ EXPECTED_NODE_COUNT="$(remote "docker node ls --format '{{.Hostname}}' | wc -l |
 
 mapfile -t WORKERS < <(remote "docker node ls --format '{{.Hostname}}|{{.ManagerStatus}}' | awk -F'|' '\$2==\"\" {print \$1}'")
 
+SELECTED_WORKERS=()
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  echo "$value"
+}
+
 log "Manager: ${MANAGER_NAME} (${TARGET_HOST})"
 log "Erwartete Nodes gesamt: ${EXPECTED_NODE_COUNT}"
 log "Gefundene Worker: ${#WORKERS[@]}"
 
 if (( ${#WORKERS[@]} > 0 )); then
   log "Worker-Liste:"
+  idx=1
   for worker_name in "${WORKERS[@]}"; do
     worker_addr="$(remote "docker node inspect --format '{{.Status.Addr}}' '${worker_name}'")"
-    echo "  - ${worker_name} (${worker_addr})"
+    echo "  ${idx}) ${worker_name} (${worker_addr})"
+    idx=$((idx + 1))
   done
+
+  if [[ "$SKIP_CONFIRM" -eq 1 ]]; then
+    SELECTED_WORKERS=("${WORKERS[@]}")
+  else
+    echo
+    read -r -p "Welche Worker rebooten? [all|none|1,3|worker1,worker2] (Default: all): " worker_choice_raw
+    worker_choice="$(trim "${worker_choice_raw:-all}")"
+
+    if [[ -z "$worker_choice" || "$worker_choice" == "all" || "$worker_choice" == "ALL" ]]; then
+      SELECTED_WORKERS=("${WORKERS[@]}")
+    elif [[ "$worker_choice" == "none" || "$worker_choice" == "NONE" ]]; then
+      SELECTED_WORKERS=()
+    else
+      IFS=',' read -r -a worker_tokens <<< "$worker_choice"
+      for token in "${worker_tokens[@]}"; do
+        token="$(trim "$token")"
+        [[ -n "$token" ]] || continue
+
+        if [[ "$token" =~ ^[0-9]+$ ]]; then
+          token_idx=$((token - 1))
+          if (( token_idx < 0 || token_idx >= ${#WORKERS[@]} )); then
+            die "Ungültiger Worker-Index: $token"
+          fi
+          SELECTED_WORKERS+=("${WORKERS[$token_idx]}")
+        else
+          found=0
+          for worker_name in "${WORKERS[@]}"; do
+            if [[ "$worker_name" == "$token" ]]; then
+              SELECTED_WORKERS+=("$worker_name")
+              found=1
+              break
+            fi
+          done
+          (( found == 1 )) || die "Unbekannter Worker-Name: $token"
+        fi
+      done
+    fi
+  fi
+fi
+
+if (( ${#SELECTED_WORKERS[@]} > 0 )); then
+  log "Ausgewählte Worker für Reboot: ${#SELECTED_WORKERS[@]}"
+else
+  warn "Keine Worker ausgewählt – es wird nur der Manager rebootet"
 fi
 
 if [[ "$SKIP_CONFIRM" -ne 1 ]]; then
@@ -106,8 +166,8 @@ if [[ "$SKIP_CONFIRM" -ne 1 ]]; then
   esac
 fi
 
-if (( ${#WORKERS[@]} > 0 )); then
-  for worker_name in "${WORKERS[@]}"; do
+if (( ${#SELECTED_WORKERS[@]} > 0 )); then
+  for worker_name in "${SELECTED_WORKERS[@]}"; do
     worker_addr="$(remote "docker node inspect --format '{{.Status.Addr}}' '${worker_name}'")"
 
     if [[ "$DRY_RUN" -eq 1 ]]; then

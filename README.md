@@ -12,7 +12,7 @@ git clone <repo-url>
 cd remoteServerInfra
 
 export TARGET_USER="ubuntu"
-export TARGET_HOST="10.10.100.162"
+export TARGET_HOST="10.10.100.175"
 export TARGET_DIR="/home/ubuntu/brewery-infra"
 
 # Core-Infrastruktur installieren
@@ -303,8 +303,8 @@ Wenn du nach dem Manager-Reboot automatisch warten und direkt prüfen willst:
 cd remoteServerInfra
 chmod +x restart_swarm_cluster_remote.sh
 
-# Testlauf ohne Reboot
-TARGET_USER=ubuntu TARGET_HOST=10.10.100.166 ./restart_swarm_cluster_remote.sh --dry-run
+# Testlauf ohne Reboot (Manager-IP wird auf Wunsch abgefragt)
+TARGET_USER=ubuntu ./restart_swarm_cluster_remote.sh --dry-run
 
 # Echtlauf mit Auto-Wait + Statusprüfung
 TARGET_USER=ubuntu TARGET_HOST=10.10.100.166 ./restart_swarm_cluster_remote.sh --yes
@@ -312,6 +312,7 @@ TARGET_USER=ubuntu TARGET_HOST=10.10.100.166 ./restart_swarm_cluster_remote.sh -
 
 Diese Variante:
 - rebootet Worker zuerst, Manager zuletzt
+- fragt auf Wunsch interaktiv nach Manager-IP und welche Worker rebootet werden sollen
 - wartet automatisch auf SSH-Reconnect des Managers
 - wartet auf `Nodes Ready` + konvergierte Service-Replikas
 - zeigt anschließend `docker node ls` und `docker service ls`

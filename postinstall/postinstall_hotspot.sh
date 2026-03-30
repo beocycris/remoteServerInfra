@@ -49,6 +49,7 @@ auth_algs=1
 ap_max_inactivity=30
 disassoc_low_ack=1
 skip_inactivity_poll=1
+max_num_sta=50
 wpa=2
 wpa_passphrase=$WPA_PASS
 wpa_key_mgmt=WPA-PSK
