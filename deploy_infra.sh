@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # ====== Konfiguration ======
-TARGET_USER="${TARGET_USER:-ubuntu}"
-TARGET_HOST="${TARGET_HOST:-10.10.100.175}"
-TARGET_DIR="${TARGET_DIR:-/home/ubuntu/brewery-infra}"
+TARGET_USER="${TARGET_USER:-masterbrewery}"
+TARGET_HOST="${TARGET_HOST:-10.10.100.161}"
+TARGET_DIR="${TARGET_DIR:-/home/masterbrewery/brewery-infra}"
 
 SSH_OPTS="${SSH_OPTS:- -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR }"
 
@@ -151,7 +151,7 @@ fi
 log "Deploy nach ${TARGET_USER}@${TARGET_HOST}:${TARGET_DIR}"
 
 # Zielverzeichnis anlegen
-ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" \
+ssh -t $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" \
   "sudo mkdir -p '${TARGET_DIR}' && sudo chown -R '${TARGET_USER}':'${TARGET_USER}' '${TARGET_DIR}'" \
   || die "Remote-Verbindung oder Rechteproblem."
 
@@ -169,7 +169,7 @@ log "Starte Postinstall auf Remote..."
 
 if [[ "$DO_HOTSPOT" -eq 1 ]]; then
   log "🔥 Modus: CORE + HOTSPOT"
-  ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
+  ssh -t $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
     cd '${TARGET_DIR}' &&
     sudo chmod +x postinstall/*.sh &&
     sudo SWARM_ACTION='${SWARM_ACTION}' \
@@ -181,7 +181,7 @@ if [[ "$DO_HOTSPOT" -eq 1 ]]; then
 
 elif [[ "$DO_MONITORING" -eq 1 ]]; then
   log "📊 Modus: MONITORING"
-  ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
+  ssh -t $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
     cd '${TARGET_DIR}' &&
     sudo chmod +x postinstall/*.sh &&
     sudo SWARM_ACTION='${SWARM_ACTION}' \
@@ -193,7 +193,7 @@ elif [[ "$DO_MONITORING" -eq 1 ]]; then
 
 else
   log "🧊 Modus: CORE ONLY"
-  ssh $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
+  ssh -t $SSH_OPTS "${TARGET_USER}@${TARGET_HOST}" "
     cd '${TARGET_DIR}' &&
     sudo chmod +x postinstall/*.sh &&
     sudo SWARM_ACTION='${SWARM_ACTION}' \
